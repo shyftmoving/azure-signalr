@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Connections;
 using Microsoft.Azure.SignalR.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
@@ -24,6 +25,7 @@ namespace Microsoft.Azure.SignalR.AspNet
         private readonly IConnectionFactory _connectionFactory;
         private readonly IClientConnectionManager _clientConnectionManager;
         private readonly ILogger _logger;
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof(ServiceConnection));
 
         public ServiceConnection(
             string connectionId,
@@ -42,14 +44,30 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         protected override Task<ConnectionContext> CreateConnection(string target = null)
         {
-            return _connectionFactory.ConnectAsync(TransferFormat.Binary, ConnectionId, target);
+            try
+            {
+                return _connectionFactory.ConnectAsync(TransferFormat.Binary, ConnectionId, target);
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         protected override Task DisposeConnection()
         {
-            var connection = ConnectionContext;
-            ConnectionContext = null;
-            return _connectionFactory.DisposeAsync(connection);
+            try
+            {
+                var connection = ConnectionContext;
+                ConnectionContext = null;
+                return _connectionFactory.DisposeAsync(connection);
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         protected override Task CleanupConnections()
@@ -63,6 +81,7 @@ namespace Microsoft.Azure.SignalR.AspNet
             }
             catch (Exception ex)
             {
+                _ourLogger.Error(ex);
                 Log.FailedToCleanupConnections(_logger, ex);
             }
             return Task.CompletedTask;
@@ -87,12 +106,14 @@ namespace Microsoft.Azure.SignalR.AspNet
             }
             catch (Exception e)
             {
+                _ourLogger.Error(e);
                 // Fail to write initial open connection message to channel
                 Log.ConnectedStartingFailed(_logger, connectionId, e);
                 // Close channel and notify client to close connection
                 clientContext.Output.TryComplete();
                 await WriteAsync(new CloseConnectionMessage(connectionId, e.Message));
             }
+
         }
 
         protected override async Task OnDisconnectedAsync(CloseConnectionMessage closeConnectionMessage)
@@ -106,6 +127,7 @@ namespace Microsoft.Azure.SignalR.AspNet
                 }
                 catch (Exception e)
                 {
+                    _ourLogger.Error(e);
                     Log.FailToWriteMessageToApplication(_logger, connectionId, e);
                 }
             }
@@ -122,6 +144,7 @@ namespace Microsoft.Azure.SignalR.AspNet
                 }
                 catch (Exception e)
                 {
+                    _ourLogger.Error(e);
                     Log.FailToWriteMessageToApplication(_logger, connectionId, e);
                 }
             }

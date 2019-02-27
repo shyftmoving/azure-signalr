@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.SignalR.Protocol;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
@@ -19,6 +20,8 @@ namespace Microsoft.Azure.SignalR.AspNet
         private readonly string _appName;
 
         private IServiceConnectionContainer _appConnection;
+
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof(ServiceConnectionManager));
 
         public ServiceConnectionStatus Status => throw new NotSupportedException();
 
@@ -36,71 +39,111 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         public void Initialize(Func<string, IServiceConnectionContainer> connectionGenerator)
         {
-            if (connectionGenerator == null)
+            try
             {
-                throw new ArgumentNullException(nameof(connectionGenerator));
-            }
+                if (connectionGenerator == null)
+                {
+                    throw new ArgumentNullException(nameof(connectionGenerator));
+                }
 
-            if (_serviceConnections != null)
-            {
-                // TODO: log something to indicate the connection is already initialized.
-                return;
-            }
-
-            lock (_lock)
-            {
                 if (_serviceConnections != null)
                 {
+                    // TODO: log something to indicate the connection is already initialized.
                     return;
                 }
 
-                var connections = new Dictionary<string, IServiceConnectionContainer>();
-
-                _appConnection = connectionGenerator(_appName);
-
-                foreach (var hub in _hubs)
+                lock (_lock)
                 {
-                    var connection = connectionGenerator(hub);
-                    connections.Add(hub, connection);
-                }
+                    if (_serviceConnections != null)
+                    {
+                        return;
+                    }
 
-                _serviceConnections = connections;
+                    var connections = new Dictionary<string, IServiceConnectionContainer>();
+
+                    _appConnection = connectionGenerator(_appName);
+
+                    foreach (var hub in _hubs)
+                    {
+                        var connection = connectionGenerator(hub);
+                        connections.Add(hub, connection);
+                    }
+
+                    _serviceConnections = connections;
+                }
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
             }
         }
 
         public Task StartAsync()
         {
-            return Task.WhenAll(GetConnections().Select(s => s.StartAsync()));
+            try
+            {
+                return Task.WhenAll(GetConnections().Select(s => s.StartAsync()));
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         public IServiceConnectionContainer WithHub(string hubName)
         {
-            if (_serviceConnections == null ||!_serviceConnections.TryGetValue(hubName, out var connection))
+            try
             {
-                throw new KeyNotFoundException($"Service connection with Hub {hubName} does not exist");
-            }
+                if (_serviceConnections == null || !_serviceConnections.TryGetValue(hubName, out var connection))
+                {
+                    throw new KeyNotFoundException($"Service connection with Hub {hubName} does not exist");
+                }
 
-            return connection;
+                return connection;
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         public virtual Task WriteAsync(ServiceMessage serviceMessage)
         {
-            if (_appConnection == null)
+            try
             {
-                throw new InvalidOperationException("App connection is not yet initialized.");
-            }
+                if (_appConnection == null)
+                {
+                    throw new InvalidOperationException("App connection is not yet initialized.");
+                }
 
-            return _appConnection.WriteAsync(serviceMessage);
+                return _appConnection.WriteAsync(serviceMessage);
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         public virtual Task WriteAsync(string partitionKey, ServiceMessage serviceMessage)
         {
-            if (_appConnection == null)
+            try
             {
-                throw new InvalidOperationException("App connection is not yet initialized.");
-            }
+                if (_appConnection == null)
+                {
+                    throw new InvalidOperationException("App connection is not yet initialized.");
+                }
 
-            return _appConnection.WriteAsync(partitionKey, serviceMessage);
+                return _appConnection.WriteAsync(partitionKey, serviceMessage);
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         private IEnumerable<IServiceConnectionContainer> GetConnections()

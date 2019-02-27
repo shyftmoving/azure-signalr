@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.SignalR.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
@@ -23,6 +24,7 @@ namespace Microsoft.Azure.SignalR.AspNet
         private readonly IServiceEndpointManager _serviceEndpointManager;
         private readonly IEndpointRouter _router;
         private readonly string _name;
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof(ServiceHubDispatcher));
 
         public ServiceHubDispatcher(IReadOnlyList<string> hubNames, IServiceProtocol protocol,
             IServiceConnectionManager serviceConnectionManager, IClientConnectionManager clientConnectionManager,
@@ -44,11 +46,19 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         public Task StartAsync()
         {
-            _serviceConnectionManager.Initialize(hub => GetMultiEndpointServiceConnectionContainer(hub));
+            try
+            {
+                _serviceConnectionManager.Initialize(hub => GetMultiEndpointServiceConnectionContainer(hub));
 
-            Log.StartingConnection(_logger, _name, _options.ConnectionCount, _hubNames.Count);
+                Log.StartingConnection(_logger, _name, _options.ConnectionCount, _hubNames.Count);
 
-            return _serviceConnectionManager.StartAsync();
+                return _serviceConnectionManager.StartAsync();
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         private MultiEndpointServiceConnectionContainer GetMultiEndpointServiceConnectionContainer(string hub)

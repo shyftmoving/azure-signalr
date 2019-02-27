@@ -9,6 +9,7 @@ using Microsoft.AspNet.SignalR.Infrastructure;
 using Microsoft.AspNet.SignalR.Transports;
 using Microsoft.Azure.SignalR.Protocol;
 using Newtonsoft.Json;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
@@ -19,6 +20,7 @@ namespace Microsoft.Azure.SignalR.AspNet
         private readonly IMemoryPool _pool;
         private readonly JsonSerializer _serializer;
         private readonly IServiceProtocol _serviceProtocol;
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof(ServiceConnectionManager));
 
         public AzureTransport(HostContext context, IDependencyResolver resolver)
         {
@@ -46,39 +48,63 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         public async Task ProcessRequest(ITransportConnection connection)
         {
-            var connected = Connected;
-            if (connected != null)
+            try
             {
-                await connected();
+                var connected = Connected;
+                if (connected != null)
+                {
+                    await connected();
+                }
+
+                await _lifetimeTcs.Task;
+
+                var disconnected = Disconnected;
+                if (disconnected != null)
+                {
+                    await disconnected(true);
+                }
             }
-
-            await _lifetimeTcs.Task;
-
-            var disconnected = Disconnected;
-            if (disconnected != null)
+            catch (Exception e)
             {
-                await disconnected(true);
+                _ourLogger.Error(e);
+                throw e;
             }
         }
 
         public Task Send(object value)
         {
-            if (_context.Environment.TryGetValue(AspNetConstants.Context.AzureServiceConnectionKey, out var connection) && connection is IServiceConnection serviceConnection)
+            try
             {
-                // Invoke service connection
-                return serviceConnection.WriteAsync(ConnectionId, value, _serviceProtocol, _serializer, _pool);
-            }
+                if (_context.Environment.TryGetValue(AspNetConstants.Context.AzureServiceConnectionKey, out var connection) && connection is IServiceConnection serviceConnection)
+                {
+                    // Invoke service connection
+                    return serviceConnection.WriteAsync(ConnectionId, value, _serviceProtocol, _serializer, _pool);
+                }
 
-            throw new InvalidOperationException("No service connection found when sending message");
+                throw new InvalidOperationException("No service connection found when sending message");
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         public void OnReceived(string value)
         {
-            var received = Received;
-            if (received != null)
+            try
             {
-                // TODO: Add log
-                _ = received(value);
+                var received = Received;
+                if (received != null)
+                {
+                    // TODO: Add log
+                    _ = received(value);
+                }
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
             }
         }
 

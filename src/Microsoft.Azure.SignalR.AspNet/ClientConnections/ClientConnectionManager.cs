@@ -33,37 +33,53 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         public IServiceTransport CreateConnection(OpenConnectionMessage message, IServiceConnection serviceConnection)
         {
-            var dispatcher = new ClientConnectionHubDispatcher(_configuration, message.ConnectionId);
-            dispatcher.Initialize(_configuration.Resolver);
-
-            var responseStream = new MemoryStream();
-            var hostContext = GetHostContext(message, responseStream, serviceConnection);
-
-            if (dispatcher.Authorize(hostContext.Request))
+            try
             {
-                // ProcessRequest checks if the connectionToken matches "{connectionid}:{userName}" format with context.User
-                _ = dispatcher.ProcessRequest(hostContext);
+                var dispatcher = new ClientConnectionHubDispatcher(_configuration, message.ConnectionId);
+                dispatcher.Initialize(_configuration.Resolver);
 
-                // TODO: check for errors written to the response
-                if (hostContext.Response.StatusCode != 200)
+                var responseStream = new MemoryStream();
+                var hostContext = GetHostContext(message, responseStream, serviceConnection);
+
+                if (dispatcher.Authorize(hostContext.Request))
                 {
-                    Log.ProcessRequestError(_logger, message.ConnectionId, hostContext.Request.QueryString.ToString());
-                    var errorResponse = GetContentAndDispose(responseStream);
-                    throw new InvalidOperationException(errorResponse);
+                    // ProcessRequest checks if the connectionToken matches "{connectionid}:{userName}" format with context.User
+                    _ = dispatcher.ProcessRequest(hostContext);
+
+                    // TODO: check for errors written to the response
+                    if (hostContext.Response.StatusCode != 200)
+                    {
+                        Log.ProcessRequestError(_logger, message.ConnectionId, hostContext.Request.QueryString.ToString());
+                        var errorResponse = GetContentAndDispose(responseStream);
+                        throw new InvalidOperationException(errorResponse);
+                    }
+
+                    _clientConnections.TryAdd(message.ConnectionId, serviceConnection);
+                    return (AzureTransport)hostContext.Environment[AspNetConstants.Context.AzureSignalRTransportKey];
                 }
 
-                _clientConnections.TryAdd(message.ConnectionId, serviceConnection);
-                return (AzureTransport)hostContext.Environment[AspNetConstants.Context.AzureSignalRTransportKey];
+                // This happens when hub is not found
+                Debug.Fail("Unauthorized");
+                throw new InvalidOperationException("Unable to authorize request");
             }
-
-            // This happens when hub is not found
-            Debug.Fail("Unauthorized");
-            throw new InvalidOperationException("Unable to authorize request");
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         public bool TryGetServiceConnection(string key, out IServiceConnection serviceConnection)
         {
-            return _clientConnections.TryGetValue(key, out serviceConnection);
+            try
+            {
+                return _clientConnections.TryGetValue(key, out serviceConnection);
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
 
         internal HostContext GetHostContext(OpenConnectionMessage message, Stream responseStream, IServiceConnection serviceConnection)

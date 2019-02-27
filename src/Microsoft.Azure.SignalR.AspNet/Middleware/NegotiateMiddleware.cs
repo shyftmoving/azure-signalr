@@ -15,6 +15,7 @@ using Microsoft.Azure.SignalR.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Owin;
 using Newtonsoft.Json;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
@@ -29,6 +30,7 @@ namespace Microsoft.Azure.SignalR.AspNet
         private readonly IServiceEndpointManager _endpointManager;
         private readonly IEndpointRouter _router;
         private readonly IUserIdProvider _provider;
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof(NegotiateMiddleware));
 
         public NegotiateMiddleware(OwinMiddleware next, HubConfiguration configuration, string appName, IServiceEndpointManager endpointManager, IEndpointRouter router, ServiceOptions options, ILoggerFactory loggerFactory)
             : base(next)
@@ -43,19 +45,27 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         public override Task Invoke(IOwinContext owinContext)
         {
-            if (owinContext == null)
+            try
             {
-                throw new ArgumentNullException(nameof(owinContext));
+                if (owinContext == null)
+                {
+                    throw new ArgumentNullException(nameof(owinContext));
+                }
+
+                var context = new HostContext(owinContext.Environment);
+
+                if (IsNegotiationRequest(context.Request))
+                {
+                    return ProcessNegotiationRequest(owinContext, context);
+                }
+
+                return Next.Invoke(owinContext);
             }
-
-            var context = new HostContext(owinContext.Environment);
-
-            if (IsNegotiationRequest(context.Request))
+            catch (Exception e)
             {
-                return ProcessNegotiationRequest(owinContext, context);
+                _ourLogger.Error(e);
+                throw e;
             }
-
-            return Next.Invoke(owinContext);
         }
 
         private Task ProcessNegotiationRequest(IOwinContext owinContext, HostContext context)

@@ -3,12 +3,14 @@
 
 using System;
 using Microsoft.Extensions.Logging;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
     internal class ServiceEndpointManager : ServiceEndpointManagerBase
     {
         private readonly TimeSpan? _ttl;
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof(ServiceEndpointManager));
 
         public ServiceEndpointManager(ServiceOptions options, ILoggerFactory loggerFactory) : 
             base(options,
@@ -24,12 +26,20 @@ namespace Microsoft.Azure.SignalR.AspNet
 
         public override IServiceEndpointProvider GetEndpointProvider(ServiceEndpoint endpoint)
         {
-            if (endpoint == null)
+            try
             {
-                throw new ArgumentNullException(nameof(endpoint));
-            }
+                if (endpoint == null)
+                {
+                    throw new ArgumentNullException(nameof(endpoint));
+                }
 
-            return new ServiceEndpointProvider(endpoint, _ttl);
+                return new ServiceEndpointProvider(endpoint, _ttl);
+            }
+            catch (Exception e)
+            {
+                _ourLogger.Error(e);
+                throw e;
+            }
         }
     }
 }
