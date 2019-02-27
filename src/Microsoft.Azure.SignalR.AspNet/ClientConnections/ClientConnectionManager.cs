@@ -12,6 +12,7 @@ using Microsoft.Azure.SignalR.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Owin;
+using nl = NLog;
 
 namespace Microsoft.Azure.SignalR.AspNet
 {
@@ -19,6 +20,7 @@ namespace Microsoft.Azure.SignalR.AspNet
     {
         private readonly HubConfiguration _configuration;
         private readonly ILogger _logger;
+        private readonly nl.Logger _ourLogger = nl.LogManager.GetCurrentClassLogger(typeof (ClientConnectionManager));
 
         private readonly ConcurrentDictionary<string, IServiceConnection> _clientConnections = new ConcurrentDictionary<string, IServiceConnection>();
 

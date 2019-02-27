@@ -10,6 +10,7 @@
   
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNet.SignalR" Version="$(MicrosoftAspNetSignalRPackageVersion)" />
+    <PackageReference Include="NLog" Version="4.5.11" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="$(SystemIdentityModelTokensJwtPackageVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.TraceSource" Version="$(MicrosoftExtensionsLoggingTraceSourcePackageVersion)" />
     <PackageReference Include="Microsoft.AspNetCore.Connections.Abstractions" Version="$(MicrosoftAspNetCoreConnectionsAbstractionsPackageVersion)" />
